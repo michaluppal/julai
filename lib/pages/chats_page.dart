@@ -23,6 +23,9 @@ class _ChatsPageState extends State<ChatsPage> {
   bool _isAwaitingResponse = false;
   List<Map<String, String>> _conversationHistory = []; // Changed the type here
 
+  // Declare the meal_information variable
+  Map<String, dynamic> meal_information = {};
+
   @override
   void initState() {
     super.initState();
@@ -64,7 +67,7 @@ class _ChatsPageState extends State<ChatsPage> {
           ],
         ),
       ),
-      backgroundColor: Color(0xFFFFF0F5),
+      backgroundColor: Color(0xFFFFFFF0), // Update the background color here
     );
   }
 
@@ -136,7 +139,7 @@ class _ChatsPageState extends State<ChatsPage> {
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 18.0,
-            color: Colors.grey,
+            color: Color.fromARGB(255, 47, 47, 47),
           ),
         ),
       ),
@@ -153,11 +156,6 @@ class _ChatsPageState extends State<ChatsPage> {
       fontSize: 16.0,
     );
 
-    TextStyle messageTimeStyle = TextStyle(
-      color: Colors.grey[600],
-      fontSize: 10.0,
-    );
-
     return Align(
       alignment: isUserMessage ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -165,7 +163,9 @@ class _ChatsPageState extends State<ChatsPage> {
         margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20.0),
-          color: isUserMessage ? Colors.blue[300] : Colors.grey[300],
+          color: isUserMessage
+              ? Colors.blue[300]
+              : Color.fromARGB(193, 255, 255, 240),
           boxShadow: [
             BoxShadow(
               color: Colors.grey.withOpacity(0.5),
@@ -181,7 +181,8 @@ class _ChatsPageState extends State<ChatsPage> {
           children: [
             Text(message.text, style: messageTextStyle),
             const SizedBox(height: 4.0),
-            Text(messageTime, style: messageTimeStyle),
+            Text(messageTime,
+                style: TextStyle(fontSize: 10.0, color: Colors.grey[600])),
           ],
         ),
       ),
@@ -200,7 +201,7 @@ class _ChatsPageState extends State<ChatsPage> {
   Widget _sendMessageArea(double screenWidth, double areaHeight) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10.0),
-      color: Color(0xFFFFF0F5),
+      color: Color(0xFFFFFFF0),
       height: areaHeight,
       child: Row(
         children: <Widget>[
@@ -212,11 +213,11 @@ class _ChatsPageState extends State<ChatsPage> {
                 hintText: 'Send a message...',
                 border: InputBorder.none,
                 filled: true,
-                fillColor: Colors.grey[200],
+                fillColor: Color(0xFFFFFFF0),
                 contentPadding:
                     EdgeInsets.symmetric(horizontal: 15.0, vertical: 15.0),
                 enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.grey[300]!, width: 3.0),
+                  borderSide: BorderSide(color: Colors.blue[300]!, width: 3.0),
                   borderRadius: BorderRadius.circular(25.0),
                 ),
                 focusedBorder: OutlineInputBorder(
@@ -244,21 +245,29 @@ class _ChatsPageState extends State<ChatsPage> {
       final messageText = _chatController.text;
       _chatController.clear();
 
-      // Add the user's message to the conversation history with updated structure
-      // When the user sends a message
       _conversationHistory.add({'role': 'user', 'content': messageText});
-
-      // Save user's message to Firestore
+      // Save user's message to Firestore (This line was missing in the current version)
       await saveMessageToFirestore(_auth.user.uid, messageText, true);
 
-      // Send the entire conversation history to the server
-      String response = await sendMessageToServer(_conversationHistory);
+      // Get response and meal info from server
+      var response = await sendMessageToServer(_conversationHistory);
+      print(response);
+      if (response['reply'].isNotEmpty) {
+        _conversationHistory
+            .add({'role': 'assistant', 'content': response['reply']});
 
-      if (response.isNotEmpty) {
-        // Add the assistant's response to the conversation history with updated structure
-        _conversationHistory.add({'role': 'assistant', 'content': response});
-        // Save assistant's response to Firestore
-        await saveMessageToFirestore(_auth.user.uid, response, false);
+        await saveMessageToFirestore(
+          _auth.user.uid,
+          response['reply'],
+          false,
+        );
+
+        // Check if meal_info is present and save it
+        if (response.containsKey('meal_info')) {
+          meal_information = response['meal_info'];
+          print(meal_information);
+          await saveMealInfoToFirestore(_auth.user.uid, meal_information);
+        }
       }
 
       setState(() {
@@ -268,7 +277,7 @@ class _ChatsPageState extends State<ChatsPage> {
   }
 
   /// Sends a message to the server and awaits a response.
-  Future<String> sendMessageToServer(
+  Future<Map<String, dynamic>> sendMessageToServer(
       List<Map<String, String>> conversationHistory) async {
     try {
       // Updated JSON encoding to handle the new conversationHistory structure
@@ -283,15 +292,14 @@ class _ChatsPageState extends State<ChatsPage> {
       );
 
       if (response.statusCode == 200) {
-        final responseBody = jsonDecode(response.body);
-        return responseBody['reply'];
+        return jsonDecode(response.body); // Return the entire response
       } else {
         print('Request failed with status: ${response.statusCode}.');
-        return '';
+        return {'reply': ''};
       }
     } catch (e) {
       print('Error sending message to server: $e');
-      return '';
+      return {'reply': ''};
     }
   }
 
@@ -305,11 +313,28 @@ class _ChatsPageState extends State<ChatsPage> {
           .collection('messages')
           .add({
         'text': message,
-        'isUserMessage': isUserMessage,
+        'isUserMessage': isUserMessage, // Ensure this is correctly set
         'timestamp': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       print('Error saving message to Firestore: $e');
+    }
+  }
+
+  /// Saves meal info to Firestore.
+  Future<void> saveMealInfoToFirestore(
+      String userId, Map<String, dynamic> mealInfo) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('meal_info')
+          .doc(userId)
+          .collection('meals')
+          .add({
+        ...mealInfo,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error saving meal info to Firestore: $e');
     }
   }
 }
