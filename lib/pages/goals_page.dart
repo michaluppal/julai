@@ -36,7 +36,7 @@ class _GoalsPageState extends State<GoalsPage> {
         child: TopBar(
           'Daily Goals',
           primaryAction: IconButton(
-            icon: Icon(Icons.settings),
+            icon: Icon(Icons.notifications_none),
             onPressed: () {
               // Handle settings action
             },
