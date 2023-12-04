@@ -29,7 +29,7 @@ class _LoginPageState extends State<LoginPage> {
   late NavigationService _navigation;
 
   final _loginFormKey = GlobalKey<FormState>(); // Declare _loginFormKey here
-
+  bool _isPasswordVisible = false; // State to manage password visibility
   String? _email;
   String? _password;
 
@@ -91,31 +91,41 @@ class _LoginPageState extends State<LoginPage> {
     return SizedBox(
       height: _deviceHeight * 0.2,
       child: Form(
-        key: _loginFormKey, // Use the _loginFormKey here
+        key: _loginFormKey,
         child: Column(
           mainAxisSize: MainAxisSize.max,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             CustomTextFormField(
-                onSaved: (_value) {
-                  setState(() {
-                    _email = _value;
-                  });
-                },
-                regEx:
-                    r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
-                hintText: "Email",
-                obscureText: false),
-            CustomTextFormField(
-                onSaved: (_value) {
-                  setState(() {
-                    _password = _value;
-                  });
-                },
-                regEx: r".{8,}",
-                hintText: "Password",
-                obscureText: true),
+              onSaved: (_value) => setState(() => _email = _value),
+              regEx:
+                  r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
+              hintText: "Email",
+              obscureText: false,
+            ),
+            Stack(
+              alignment: Alignment.centerRight,
+              children: [
+                CustomTextFormField(
+                  onSaved: (_value) => setState(() => _password = _value),
+                  regEx: r".{8,}",
+                  hintText: "Password",
+                  obscureText: !_isPasswordVisible, // Visibility toggled here
+                ),
+                IconButton(
+                  icon: Icon(
+                    // Change icon based on visibility state
+                    _isPasswordVisible
+                        ? Icons.visibility_off
+                        : Icons.visibility,
+                    color: Colors.grey,
+                  ),
+                  onPressed: () =>
+                      setState(() => _isPasswordVisible = !_isPasswordVisible),
+                ),
+              ],
+            ),
           ],
         ),
       ),

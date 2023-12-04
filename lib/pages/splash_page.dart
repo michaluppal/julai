@@ -18,20 +18,43 @@ class SplashPage extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<StatefulWidget> createState() {
-    return _SplashPageState();
-  }
+  State<StatefulWidget> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends State<SplashPage> {
+class _SplashPageState extends State<SplashPage>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2)).then((_) {
-      _setup().then(
-        (_) => widget.onInitializationComplete(),
-      );
+
+    // Initialize the animation controller and animation
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeIn,
+    );
+
+    // Start the animation and then proceed with initialization
+    _controller.forward().then((_) {
+      Future.delayed(const Duration(seconds: 2)).then((_) {
+        _setup().then(
+          (_) => widget.onInitializationComplete(),
+        );
+      });
     });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -46,13 +69,17 @@ class _SplashPageState extends State<SplashPage> {
       ),
       home: Scaffold(
         body: Center(
-          child: Container(
-            height: 200,
-            width: 200,
-            decoration: const BoxDecoration(
-              image: DecorationImage(
+          child: FadeTransition(
+            opacity: _animation,
+            child: Container(
+              height: 200,
+              width: 200,
+              decoration: const BoxDecoration(
+                image: DecorationImage(
                   fit: BoxFit.contain,
-                  image: AssetImage('assets/images/splash.png')),
+                  image: AssetImage('assets/images/splash.png'),
+                ),
+              ),
             ),
           ),
         ),

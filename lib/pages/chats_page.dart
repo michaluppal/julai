@@ -1,3 +1,4 @@
+import 'dart:convert'; // Import for jsonEncode
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:julia/providers/authentication_provider.dart';
@@ -5,13 +6,9 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:provider/provider.dart';
 import 'package:julia/models/chat_messages.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:julia/widgets/top_bar.dart';
-import 'package:julia/widgets/typing_indicator.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
 
-/// This class represents the chat page in the application.
 class ChatsPage extends StatefulWidget {
   @override
   _ChatsPageState createState() => _ChatsPageState();
@@ -21,9 +18,7 @@ class _ChatsPageState extends State<ChatsPage> {
   late AuthenticationProvider _auth;
   final TextEditingController _chatController = TextEditingController();
   bool _isAwaitingResponse = false;
-  List<Map<String, String>> _conversationHistory = []; // Changed the type here
-
-  // Declare the meal_information variable
+  List<Map<String, String>> _conversationHistory = [];
   Map<String, dynamic> meal_information = {};
 
   @override
@@ -34,22 +29,14 @@ class _ChatsPageState extends State<ChatsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Get the screen height and width for responsive UI design.
-    double screenHeight = MediaQuery.of(context).size.height;
-    double screenWidth = MediaQuery.of(context).size.width;
-    double _appBarHeight = AppBar().preferredSize.height * 0.8;
-    double _sendMessageAreaHeight = screenHeight * 0.1;
-
     return Scaffold(
       appBar: PreferredSize(
-        preferredSize: Size.fromHeight(_appBarHeight),
+        preferredSize: Size.fromHeight(AppBar().preferredSize.height),
         child: TopBar(
           'Chat',
           primaryAction: IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: () {
-              _auth.logout();
-            },
+            icon: Icon(Icons.notifications_none),
+            onPressed: () {},
           ),
           fontSize: 35,
         ),
@@ -61,22 +48,18 @@ class _ChatsPageState extends State<ChatsPage> {
             Expanded(
               child: _chatListView(),
             ),
-            //SizedBox(height: screenHeight * 0.001),
-            _sendMessageArea(screenWidth, _sendMessageAreaHeight),
-            SizedBox(height: screenHeight * 0.02),
+            _sendMessageArea(),
           ],
         ),
       ),
-      backgroundColor: Color(0xFFFFFFF0), // Update the background color here
+      backgroundColor: Color(0xFFFFFFF0),
     );
   }
 
-  /// Refreshes the chat.
   Future<void> _refreshChat() async {
     setState(() {});
   }
 
-  /// Builds the list view of chat messages.
   Widget _chatListView() {
     final String userId = _auth.user.uid;
 
@@ -99,37 +82,32 @@ class _ChatsPageState extends State<ChatsPage> {
           return _emptyChatPlaceholder();
         }
 
-        List<Message> messages = snapshot.data!.docs
-            .map((doc) =>
-                Message.fromFirestore(doc.data() as Map<String, dynamic>))
-            .toList();
+        List<DocumentSnapshot> docs = snapshot.data!.docs;
+        List<Widget> messageWidgets = [];
+        DateTime? previousMessageDate;
 
-        if (_isAwaitingResponse) {
-          messages.insert(
-              0,
-              Message(
-                text: '',
-                isUserMessage: false,
-                timestamp: DateTime.now(),
-              ));
+        for (int i = 0; i < docs.length; i++) {
+          Message message =
+              Message.fromFirestore(docs[i].data() as Map<String, dynamic>);
+          DateTime messageDate = message.timestamp;
+          if (previousMessageDate == null ||
+              messageDate.day != previousMessageDate.day) {
+            if (i != 0) {
+              messageWidgets.add(_buildDateDivider(messageDate));
+            }
+            previousMessageDate = messageDate;
+          }
+          messageWidgets.add(_buildMessageBubble(message));
         }
 
-        return ListView.builder(
+        return ListView(
           reverse: true,
-          itemCount: messages.length,
-          itemBuilder: (context, index) {
-            var message = messages[index];
-            bool isTypingIndicator = index == 0 && _isAwaitingResponse;
-            return isTypingIndicator
-                ? _buildTypingIndicator()
-                : _buildMessageBubble(message);
-          },
+          children: messageWidgets,
         );
       },
     );
   }
 
-  /// Returns a placeholder widget when chat is empty.
   Widget _emptyChatPlaceholder() {
     return const Center(
       child: Padding(
@@ -146,7 +124,28 @@ class _ChatsPageState extends State<ChatsPage> {
     );
   }
 
-  /// Builds individual message bubble.
+  Widget _buildDateDivider(DateTime date) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+          decoration: BoxDecoration(
+            color: Colors.grey[300],
+            borderRadius: BorderRadius.circular(12.0),
+          ),
+          child: Text(
+            DateFormat('MMMM d').format(date),
+            style: TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(Message message) {
     bool isUserMessage = message.isUserMessage;
     String messageTime = DateFormat('h:mm a').format(message.timestamp);
@@ -189,20 +188,14 @@ class _ChatsPageState extends State<ChatsPage> {
     );
   }
 
-  /// Builds the typing indicator.
-  Widget _buildTypingIndicator() {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: TypingIndicator(),
-    );
-  }
+  Widget _sendMessageArea() {
+    double screenWidth = MediaQuery.of(context).size.width;
+    double sendMessageAreaHeight = MediaQuery.of(context).size.height * 0.1;
 
-  /// Builds the area where the user types and sends messages.
-  Widget _sendMessageArea(double screenWidth, double areaHeight) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 10.0),
       color: Color(0xFFFFFFF0),
-      height: areaHeight,
+      height: sendMessageAreaHeight,
       child: Row(
         children: <Widget>[
           Expanded(
@@ -230,49 +223,39 @@ class _ChatsPageState extends State<ChatsPage> {
           IconButton(
             icon: const Icon(Icons.send,
                 color: Color.fromARGB(255, 64, 129, 182)),
-            onPressed: () {
-              _handleSendMessage();
-            },
+            onPressed: _handleSendMessage,
           ),
         ],
       ),
     );
   }
 
-  /// Handles sending a message.
   Future<void> _handleSendMessage() async {
     if (_chatController.text.isNotEmpty) {
       final messageText = _chatController.text;
       _chatController.clear();
 
       _conversationHistory.add({'role': 'user', 'content': messageText});
-      // Save user's message to Firestore (This line was missing in the current version)
       await saveMessageToFirestore(_auth.user.uid, messageText, true);
 
-      // Get response and meal info from server
       var response = await sendMessageToServer(_conversationHistory);
-      print(response);
       if (response['reply'].isNotEmpty) {
         _conversationHistory
             .add({'role': 'assistant', 'content': response['reply']});
 
-        await saveMessageToFirestore(
-          _auth.user.uid,
-          response['reply'],
-          false,
-        );
+        await saveMessageToFirestore(_auth.user.uid, response['reply'], false);
 
-        // Check if meal_info is present and save it
         if (response.containsKey('meal_info')) {
           meal_information = response['meal_info'];
-          print(meal_information);
           await saveMealInfoToFirestore(_auth.user.uid, meal_information);
         }
       }
 
-      setState(() {
-        _isAwaitingResponse = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isAwaitingResponse = false;
+        });
+      }
     }
   }
 
